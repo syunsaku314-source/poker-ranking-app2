@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NSPポーカー大会</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #e2e8f0;
+        }
+        .container {
+            max-width: 768px;
+        }
+        .ranking-table th, .ranking-table td {
+            padding: 1rem;
+            border-bottom: 1px solid #334155;
+            text-align: left;
+        }
+        .ranking-row:nth-child(even) {
+            background-color: #1e293b;
+        }
+        .ranking-row:nth-child(odd) {
+            background-color: #0f172a;
+        }
+        .ranking-row:hover {
+            background-color: #334155;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8 flex flex-col items-center min-h-screen">
+    <div class="container bg-slate-800 p-6 rounded-3xl shadow-lg w-full">
+        <h1 class="text-3xl font-bold text-center mb-6 text-white">NSPポーカー大会</h1>
+
+        <!-- Loading Indicator -->
+        <div id="loading" class="hidden text-center text-blue-400 mb-4">
+            <svg class="animate-spin h-5 w-5 text-blue-400 inline-block mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span id="loading-text">読み込み中...</span>
+        </div>
+
+        <!-- Form -->
+        <div class="mb-8 p-6 bg-slate-700 rounded-2xl shadow-inner">
+            <h2 class="text-xl font-semibold mb-4 text-white">スコア入力</h2>
+            <form id="scoreForm" class="space-y-4">
+                <div id="nameInputGroup" class="relative">
+                    <label for="name" class="block text-sm font-medium text-slate-300 mb-1">名前</label>
+                    <input type="text" id="name" name="name" class="mt-1 block w-full rounded-lg bg-slate-600 border-transparent focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50 p-3 text-white" placeholder="名前を入力してください" required>
+                    <div id="nameDropdown" class="absolute z-10 w-full bg-slate-600 rounded-lg shadow-lg max-h-40 overflow-y-auto mt-1 hidden"></div>
+                </div>
+                <div>
+                    <label for="chips" class="block text-sm font-medium text-slate-300 mb-1">総チップ数</label>
+                    <input type="number" id="chips" name="chips" class="mt-1 block w-full rounded-lg bg-slate-600 border-transparent focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50 p-3 text-white" placeholder="例: 10000" required>
+                </div>
+                <div>
+                    <label for="busted" class="block text-sm font-medium text-slate-300 mb-1">飛んだ回数</label>
+                    <input type="number" id="busted" name="busted" class="mt-1 block w-full rounded-lg bg-slate-600 border-transparent focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50 p-3 text-white" placeholder="例: 1" required>
+                </div>
+                <button type="submit" id="submitBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out transform hover:scale-105 shadow-md">
+                    送信
+                </button>
+            </form>
+            <div id="messageBox" class="mt-4 hidden p-3 rounded-lg text-center font-semibold"></div>
+        </div>
+
+        <!-- Ranking Table -->
+        <div class="p-6 bg-slate-700 rounded-2xl shadow-inner">
+            <h2 class="text-xl font-semibold mb-4 text-white">ランキング</h2>
+            <div class="overflow-x-auto">
+                <table class="ranking-table w-full text-sm sm:text-base">
+                    <thead>
+                        <tr class="bg-slate-600">
+                            <th class="rounded-tl-lg">順位</th>
+                            <th>名前</th>
+                            <th>スコア</th>
+                            <th class="rounded-tr-lg hidden sm:table-cell">チップ数</th>
+                            <th class="rounded-tr-lg hidden sm:table-cell">飛んだ回数</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rankingTableBody">
+                        <!-- Ranking data will be inserted here -->
+                    </tbody>
+                </table>
+            </div>
+            <div id="noDataMessage" class="hidden text-center text-slate-400 mt-4">
+                <p>まだデータがありません。</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, where, getDocs, setDoc, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global variables provided by the Canvas environment.
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        
+        // UI elements
+        const loadingDiv = document.getElementById('loading');
+        const loadingText = document.getElementById('loading-text');
+        const form = document.getElementById('scoreForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const nameInput = document.getElementById('name');
+        const chipsInput = document.getElementById('chips');
+        const bustedInput = document.getElementById('busted');
+        const rankingTableBody = document.getElementById('rankingTableBody');
+        const noDataMessage = document.getElementById('noDataMessage');
+        const messageBox = document.getElementById('messageBox');
+        const nameDropdown = document.getElementById('nameDropdown');
+
+        let db;
+        let auth;
+        let userId;
+
+        // Message box for showing user feedback
+        function showMessage(message, type = 'success') {
+            messageBox.textContent = message;
+            messageBox.className = `mt-4 p-3 rounded-lg text-center font-semibold ${type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`;
+            messageBox.style.display = 'block';
+            setTimeout(() => {
+                messageBox.style.display = 'none';
+            }, 3000);
+        }
+
+        // Initialize Firebase and authenticate user
+        async function initializeFirebase() {
+            try {
+                loadingDiv.style.display = 'block';
+                loadingText.textContent = 'アプリを初期化しています...';
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                userId = auth.currentUser?.uid || crypto.randomUUID();
+                loadingDiv.style.display = 'none';
+                setupRealtimeRankingListener();
+                setupNameDropdown();
+            } catch (error) {
+                console.error("Firebaseの初期化に失敗しました: ", error);
+                loadingText.textContent = '初期化エラー: ' + error.message;
+            }
+        }
+
+        // Set up real-time listener for ranking data
+        function setupRealtimeRankingListener() {
+            if (!db) {
+                console.error("Firestoreが初期化されていません。");
+                return;
+            }
+            loadingText.textContent = 'ランキングデータを読み込んでいます...';
+            loadingDiv.style.display = 'block';
+
+            const publicDataCollectionRef = collection(db, `artifacts/${appId}/public/data/poker_scores`);
+            onSnapshot(publicDataCollectionRef, (querySnapshot) => {
+                const scores = [];
+                querySnapshot.forEach((doc) => {
+                    scores.push({ id: doc.id, ...doc.data() });
+                });
+
+                // Sort scores by 'score' in descending order
+                scores.sort((a, b) => b.score - a.score);
+
+                renderRankingTable(scores);
+                loadingDiv.style.display = 'none';
+            }, (error) => {
+                console.error("ランキングデータの取得に失敗しました: ", error);
+                loadingDiv.style.display = 'none';
+                showMessage('ランキングデータの読み込みに失敗しました。', 'error');
+            });
+        }
+
+        // Render the ranking table with sorted data
+        function renderRankingTable(scores) {
+            rankingTableBody.innerHTML = '';
+            if (scores.length === 0) {
+                noDataMessage.style.display = 'block';
+                return;
+            }
+            noDataMessage.style.display = 'none';
+
+            scores.forEach((scoreData, index) => {
+                const row = document.createElement('tr');
+                row.className = `ranking-row transition-colors duration-200`;
+                row.innerHTML = `
+                    <td class="p-4 text-center rounded-l-lg">${index + 1}</td>
+                    <td class="p-4">${scoreData.name}</td>
+                    <td class="p-4 font-bold text-blue-300">${scoreData.score.toLocaleString()}</td>
+                    <td class="p-4 hidden sm:table-cell">${scoreData.chips.toLocaleString()}</td>
+                    <td class="p-4 rounded-r-lg hidden sm:table-cell">${scoreData.busted}</td>
+                `;
+                rankingTableBody.appendChild(row);
+            });
+        }
+
+        // Fetch user names for dropdown
+        async function setupNameDropdown() {
+            if (!db) return;
+            try {
+                const publicDataCollectionRef = collection(db, `artifacts/${appId}/public/data/poker_scores`);
+                const querySnapshot = await getDocs(publicDataCollectionRef);
+                const names = new Set();
+                querySnapshot.forEach((doc) => {
+                    names.add(doc.data().name);
+                });
+
+                nameInput.addEventListener('input', () => showDropdown(Array.from(names)));
+                nameInput.addEventListener('focus', () => showDropdown(Array.from(names)));
+                nameInput.addEventListener('blur', () => {
+                    setTimeout(() => nameDropdown.style.display = 'none', 200);
+                });
+            } catch (error) {
+                console.error("ユーザー名の取得に失敗しました:", error);
+            }
+        }
+
+        function showDropdown(names) {
+            const inputValue = nameInput.value.toLowerCase();
+            nameDropdown.innerHTML = '';
+            if (!inputValue) {
+                nameDropdown.style.display = 'none';
+                return;
+            }
+
+            const filteredNames = names.filter(name => name.toLowerCase().includes(inputValue));
+            if (filteredNames.length > 0) {
+                filteredNames.forEach(name => {
+                    const item = document.createElement('div');
+                    item.className = 'p-3 hover:bg-slate-500 cursor-pointer text-white';
+                    item.textContent = name;
+                    item.addEventListener('mousedown', (e) => {
+                        e.preventDefault(); // Prevent blur on click
+                        nameInput.value = name;
+                        nameDropdown.style.display = 'none';
+                    });
+                    nameDropdown.appendChild(item);
+                });
+                nameDropdown.style.display = 'block';
+            } else {
+                nameDropdown.style.display = 'none';
+            }
+        }
+
+        // Handle form submission
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            submitBtn.disabled = true;
+            submitBtn.textContent = '送信中...';
+            try {
+                const name = nameInput.value.trim();
+                const chips = parseInt(chipsInput.value, 10);
+                const busted = parseInt(bustedInput.value, 10);
+                const score = chips - (busted * 300);
+
+                if (isNaN(score)) {
+                    showMessage('有効な数値を入力してください。', 'error');
+                    return;
+                }
+
+                // Check if a document with the same name already exists
+                const publicDataCollectionRef = collection(db, `artifacts/${appId}/public/data/poker_scores`);
+                const q = query(publicDataCollectionRef, where("name", "==", name));
+                const querySnapshot = await getDocs(q);
+
+                let documentIdToUpdate = null;
+                if (!querySnapshot.empty) {
+                    querySnapshot.forEach(doc => {
+                        documentIdToUpdate = doc.id;
+                    });
+                    
+                }
+                
+                const data = {
+                    name,
+                    chips,
+                    busted,
+                    score,
+                    updatedAt: new Date(),
+                    // Add userId for security rules
+                    userId: auth.currentUser.uid 
+                };
+
+                if (documentIdToUpdate) {
+                    // Update existing document
+                    const docRef = doc(db, `artifacts/${appId}/public/data/poker_scores`, documentIdToUpdate);
+                    await setDoc(docRef, data, { merge: true });
+                    showMessage('スコアが更新されました！');
+                } else {
+                    // Add new document
+                    await addDoc(publicDataCollectionRef, data);
+                    showMessage('スコアが送信されました！');
+                }
+                
+                // Clear form inputs
+                form.reset();
+                setupNameDropdown(); // Refresh dropdown list
+                
+            } catch (error) {
+                console.error("データの送信に失敗しました: ", error);
+                showMessage('データの送信中にエラーが発生しました。', 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '送信';
+            }
+        });
+
+        // Initialize on window load
+        window.onload = initializeFirebase;
+    </script>
+</body>
+</html>
