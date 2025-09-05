@@ -103,6 +103,13 @@
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
         
+        // **修正箇所**
+        // プロジェクトIDが提供されていない場合に備えて、デフォルト値を設定します。
+        // このデフォルト値は、ホスティング環境でのみ有効です。
+        if (!firebaseConfig.projectId && appId !== 'default-app-id') {
+            firebaseConfig.projectId = appId;
+        }
+
         // UI elements
         const loadingDiv = document.getElementById('loading');
         const loadingText = document.getElementById('loading-text');
@@ -280,7 +287,6 @@
                     querySnapshot.forEach(doc => {
                         documentIdToUpdate = doc.id;
                     });
-                    
                 }
                 
                 const data = {
@@ -322,3 +328,5 @@
     </script>
 </body>
 </html>
+
+
