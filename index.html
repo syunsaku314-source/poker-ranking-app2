@@ -77,8 +77,9 @@
                             <th class="rounded-tl-lg">順位</th>
                             <th>名前</th>
                             <th>スコア</th>
-                            <th class="rounded-tr-lg hidden sm:table-cell">チップ数</th>
-                            <th class="rounded-tr-lg hidden sm:table-cell">飛んだ回数</th>
+                            <th class="hidden sm:table-cell">チップ数</th>
+                            <th class="hidden sm:table-cell">飛んだ回数</th>
+                            <th class="rounded-tr-lg">操作</th>
                         </tr>
                     </thead>
                     <tbody id="rankingTableBody">
@@ -96,14 +97,14 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, where, getDocs, setDoc, doc, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, where, getDocs, setDoc, doc, Timestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // 正しいfirebaseConfig：storageBucketのtypo修正済み
+        // Firebase config（storageBucketは必ず .appspot.com に！）
         const firebaseConfig = {
             apiKey: "AIzaSyCP7ex9lofJks6Ul_ZWqpyfD1ph1eqPryU",
             authDomain: "porker-3fd74.firebaseapp.com",
             projectId: "porker-3fd74",
-            storageBucket: "porker-3fd74.appspot.com", // ←ここ必ず修正してください
+            storageBucket: "porker-3fd74.appspot.com",
             messagingSenderId: "275066176317",
             appId: "1:275066176317:web:466d7e56c88622ece8bb54",
             measurementId: "G-L0QH5QTVNE"
@@ -187,6 +188,7 @@
             });
         }
 
+        // ランキングテーブル描画＋削除ボタン
         function renderRankingTable(scores) {
             rankingTableBody.innerHTML = '';
             if (scores.length === 0) {
@@ -203,9 +205,32 @@
                     <td class="p-4">${scoreData.name}</td>
                     <td class="p-4 font-bold text-blue-300">${scoreData.score?.toLocaleString?.() ?? ''}</td>
                     <td class="p-4 hidden sm:table-cell">${scoreData.chips?.toLocaleString?.() ?? ''}</td>
-                    <td class="p-4 rounded-r-lg hidden sm:table-cell">${scoreData.busted ?? ''}</td>
+                    <td class="p-4 hidden sm:table-cell">${scoreData.busted ?? ''}</td>
+                    <td class="p-4 text-center rounded-r-lg">
+                        <button 
+                            class="delete-player-btn bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 rounded transition"
+                            data-doc-id="${scoreData.id}">
+                            削除
+                        </button>
+                    </td>
                 `;
                 rankingTableBody.appendChild(row);
+            });
+
+            // 削除ボタンにイベントリスナーを設定
+            document.querySelectorAll('.delete-player-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    const docId = btn.getAttribute('data-doc-id');
+                    if (window.confirm("本当にこのプレイヤーを削除しますか？")) {
+                        try {
+                            await deleteDoc(doc(db, COLLECTION_NAME, docId));
+                            showMessage('プレイヤーを削除しました', 'success');
+                        } catch (error) {
+                            console.error("削除に失敗:", error);
+                            showMessage('削除に失敗しました', 'error');
+                        }
+                    }
+                });
             });
         }
 
