@@ -133,6 +133,9 @@
         // Initialize Firebase and authenticate user
         async function initializeFirebase() {
             try {
+                // Check Firebase config in the console
+                console.log("Firebase config:", firebaseConfig);
+
                 loadingDiv.style.display = 'block';
                 loadingText.textContent = 'アプリを初期化しています...';
                 const app = initializeApp(firebaseConfig);
@@ -321,4 +324,6 @@
     </script>
 </body>
 </html>
+
+
 
