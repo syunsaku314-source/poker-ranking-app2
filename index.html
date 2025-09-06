@@ -77,8 +77,8 @@
                             <th class="rounded-tl-lg">順位</th>
                             <th>名前</th>
                             <th>スコア</th>
-                            <th class="hidden sm:table-cell">チップ数</th>
-                            <th class="hidden sm:table-cell">飛んだ回数</th>
+                            <th>総チップ数</th>
+                            <th>飛んだ回数</th>
                             <th class="rounded-tr-lg">操作</th>
                         </tr>
                     </thead>
@@ -204,8 +204,8 @@
                     <td class="p-4 text-center rounded-l-lg">${index + 1}</td>
                     <td class="p-4">${scoreData.name}</td>
                     <td class="p-4 font-bold text-blue-300">${scoreData.score?.toLocaleString?.() ?? ''}</td>
-                    <td class="p-4 hidden sm:table-cell">${scoreData.chips?.toLocaleString?.() ?? ''}</td>
-                    <td class="p-4 hidden sm:table-cell">${scoreData.busted ?? ''}</td>
+                    <td class="p-4">${scoreData.chips?.toLocaleString?.() ?? ''}</td>
+                    <td class="p-4">${scoreData.busted ?? ''}</td>
                     <td class="p-4 text-center rounded-r-lg">
                         <button 
                             class="delete-player-btn bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-3 rounded transition"
