@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NSPポーカー大会</title>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -95,235 +95,26 @@
     <!-- Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, addDoc, onSnapshot, query, where, getDocs, setDoc, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, where, getDocs, setDoc, doc, Timestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Global variables provided by the Canvas environment.
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-        
-        // UI elements
-        const loadingDiv = document.getElementById('loading');
-        const loadingText = document.getElementById('loading-text');
-        const form = document.getElementById('scoreForm');
-        const submitBtn = document.getElementById('submitBtn');
-        const nameInput = document.getElementById('name');
-        const chipsInput = document.getElementById('chips');
-        const bustedInput = document.getElementById('busted');
-        const rankingTableBody = document.getElementById('rankingTableBody');
-        const noDataMessage = document.getElementById('noDataMessage');
-        const messageBox = document.getElementById('messageBox');
-        const nameDropdown = document.getElementById('nameDropdown');
+        // 正しいFirebaseConfig（storageBucketのスペル直し）
+        const firebaseConfig = {
+            apiKey: "AIzaSyCP7ex9lofJks6Ul_ZWqpyfD1ph1eqPryU",
+            authDomain: "porker-3fd74.firebaseapp.com",
+            projectId: "porker-3fd74",
+            storageBucket: "porker-3fd74.appspot.com",
+            messagingSenderId: "275066176317",
+            appId: "1:275066176317:web:466d7e56c88622ece8bb54",
+            measurementId: "G-L0QH5QTVNE"
+        };
+        const appId = "nsp-poker"; // 固定でOK
 
-        let db;
-        let auth;
-        let userId;
+        // ...（以下はあなたの現状コードと同じ）
 
-        // Message box for showing user feedback
-        function showMessage(message, type = 'success') {
-            messageBox.textContent = message;
-            messageBox.className = `mt-4 p-3 rounded-lg text-center font-semibold ${type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`;
-            messageBox.style.display = 'block';
-            setTimeout(() => {
-                messageBox.style.display = 'none';
-            }, 3000);
-        }
+        // 省略: 以降はあなたのJavaScriptそのまま
 
-        // Initialize Firebase and authenticate user
-        async function initializeFirebase() {
-            try {
-                // Check Firebase config in the console
-                console.log("Firebase config:", firebaseConfig);
-
-                loadingDiv.style.display = 'block';
-                loadingText.textContent = 'アプリを初期化しています...';
-                const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-                
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    await signInAnonymously(auth);
-                }
-
-                userId = auth.currentUser?.uid || crypto.randomUUID();
-                loadingDiv.style.display = 'none';
-                setupRealtimeRankingListener();
-                setupNameDropdown();
-            } catch (error) {
-                console.error("Firebaseの初期化に失敗しました: ", error);
-                loadingText.textContent = '初期化エラー: ' + error.message;
-            }
-        }
-
-        // Set up real-time listener for ranking data
-        function setupRealtimeRankingListener() {
-            if (!db) {
-                console.error("Firestoreが初期化されていません。");
-                return;
-            }
-            loadingText.textContent = 'ランキングデータを読み込んでいます...';
-            loadingDiv.style.display = 'block';
-
-            const publicDataCollectionRef = collection(db, `artifacts/${appId}/public/data/poker_scores`);
-            onSnapshot(publicDataCollectionRef, (querySnapshot) => {
-                const scores = [];
-                querySnapshot.forEach((doc) => {
-                    scores.push({ id: doc.id, ...doc.data() });
-                });
-
-                // Sort scores by 'score' in descending order
-                scores.sort((a, b) => b.score - a.score);
-
-                renderRankingTable(scores);
-                loadingDiv.style.display = 'none';
-            }, (error) => {
-                console.error("ランキングデータの取得に失敗しました: ", error);
-                loadingDiv.style.display = 'none';
-                showMessage('ランキングデータの読み込みに失敗しました。', 'error');
-            });
-        }
-
-        // Render the ranking table with sorted data
-        function renderRankingTable(scores) {
-            rankingTableBody.innerHTML = '';
-            if (scores.length === 0) {
-                noDataMessage.style.display = 'block';
-                return;
-            }
-            noDataMessage.style.display = 'none';
-
-            scores.forEach((scoreData, index) => {
-                const row = document.createElement('tr');
-                row.className = `ranking-row transition-colors duration-200`;
-                row.innerHTML = `
-                    <td class="p-4 text-center rounded-l-lg">${index + 1}</td>
-                    <td class="p-4">${scoreData.name}</td>
-                    <td class="p-4 font-bold text-blue-300">${scoreData.score.toLocaleString()}</td>
-                    <td class="p-4 hidden sm:table-cell">${scoreData.chips.toLocaleString()}</td>
-                    <td class="p-4 rounded-r-lg hidden sm:table-cell">${scoreData.busted}</td>
-                `;
-                rankingTableBody.appendChild(row);
-            });
-        }
-
-        // Fetch user names for dropdown
-        async function setupNameDropdown() {
-            if (!db) return;
-            try {
-                const publicDataCollectionRef = collection(db, `artifacts/${appId}/public/data/poker_scores`);
-                const querySnapshot = await getDocs(publicDataCollectionRef);
-                const names = new Set();
-                querySnapshot.forEach((doc) => {
-                    names.add(doc.data().name);
-                });
-
-                nameInput.addEventListener('input', () => showDropdown(Array.from(names)));
-                nameInput.addEventListener('focus', () => showDropdown(Array.from(names)));
-                nameInput.addEventListener('blur', () => {
-                    setTimeout(() => nameDropdown.style.display = 'none', 200);
-                });
-            } catch (error) {
-                console.error("ユーザー名の取得に失敗しました:", error);
-            }
-        }
-
-        function showDropdown(names) {
-            const inputValue = nameInput.value.toLowerCase();
-            nameDropdown.innerHTML = '';
-            if (!inputValue) {
-                nameDropdown.style.display = 'none';
-                return;
-            }
-
-            const filteredNames = names.filter(name => name.toLowerCase().includes(inputValue));
-            if (filteredNames.length > 0) {
-                filteredNames.forEach(name => {
-                    const item = document.createElement('div');
-                    item.className = 'p-3 hover:bg-slate-500 cursor-pointer text-white';
-                    item.textContent = name;
-                    item.addEventListener('mousedown', (e) => {
-                        e.preventDefault(); // Prevent blur on click
-                        nameInput.value = name;
-                        nameDropdown.style.display = 'none';
-                    });
-                    nameDropdown.appendChild(item);
-                });
-                nameDropdown.style.display = 'block';
-            } else {
-                nameDropdown.style.display = 'none';
-            }
-        }
-
-        // Handle form submission
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            submitBtn.disabled = true;
-            submitBtn.textContent = '送信中...';
-            try {
-                const name = nameInput.value.trim();
-                const chips = parseInt(chipsInput.value, 10);
-                const busted = parseInt(bustedInput.value, 10);
-                const score = chips - (busted * 300);
-
-                if (isNaN(score)) {
-                    showMessage('有効な数値を入力してください。', 'error');
-                    return;
-                }
-
-                // Check if a document with the same name already exists
-                const publicDataCollectionRef = collection(db, `artifacts/${appId}/public/data/poker_scores`);
-                const q = query(publicDataCollectionRef, where("name", "==", name));
-                const querySnapshot = await getDocs(q);
-
-                let documentIdToUpdate = null;
-                if (!querySnapshot.empty) {
-                    querySnapshot.forEach(doc => {
-                        documentIdToUpdate = doc.id;
-                    });
-                }
-                
-                const data = {
-                    name,
-                    chips,
-                    busted,
-                    score,
-                    updatedAt: new Date(),
-                    // Add userId for security rules
-                    userId: auth.currentUser.uid 
-                };
-
-                if (documentIdToUpdate) {
-                    // Update existing document
-                    const docRef = doc(db, `artifacts/${appId}/public/data/poker_scores`, documentIdToUpdate);
-                    await setDoc(docRef, data, { merge: true });
-                    showMessage('スコアが更新されました！');
-                } else {
-                    // Add new document
-                    await addDoc(publicDataCollectionRef, data);
-                    showMessage('スコアが送信されました！');
-                }
-                
-                // Clear form inputs
-                form.reset();
-                setupNameDropdown(); // Refresh dropdown list
-                
-            } catch (error) {
-                console.error("データの送信に失敗しました: ", error);
-                showMessage('データの送信中にエラーが発生しました。', 'error');
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.textContent = '送信';
-            }
-        });
-
-        // Initialize on window load
-        window.onload = initializeFirebase;
+        // もしFirestoreが書き込みできない場合は、ルールを確認してください
     </script>
 </body>
 </html>
-
-
-
