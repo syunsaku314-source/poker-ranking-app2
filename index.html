@@ -100,14 +100,7 @@
 
         // Global variables provided by the Canvas environment.
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = {
-            apiKey: "AIzaSyCP7ex9lofJks6Ul_ZWqpyfD1ph1eqPryU", // <--- ここにあなたのAPIキーを貼り付けてください
-            authDomain: "porker-3fd74.firebaseapp.com", // <--- ここにあなたのauthDomainを貼り付けてください
-            projectId: "porker-3fd74", // <--- ここにあなたのprojectIdを貼り付けてください
-            storageBucket: "porker-3fd74.firebasestorage.app", // <--- ここにあなたのstorageBucketを貼り付けてください
-            messagingSenderId: "275066176317", // <--- ここにあなたのmessagingSenderIdを貼り付けてください
-            appId: "1:275066176317:web:466d7e56c88622ece8bb54" // <--- ここにあなたのappIdを貼り付けてください
-        };
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
         
         // UI elements
@@ -264,3 +257,67 @@
         // Handle form submission
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
+            submitBtn.disabled = true;
+            submitBtn.textContent = '送信中...';
+            try {
+                const name = nameInput.value.trim();
+                const chips = parseInt(chipsInput.value, 10);
+                const busted = parseInt(bustedInput.value, 10);
+                const score = chips - (busted * 300);
+
+                if (isNaN(score)) {
+                    showMessage('有効な数値を入力してください。', 'error');
+                    return;
+                }
+
+                // Check if a document with the same name already exists
+                const publicDataCollectionRef = collection(db, `artifacts/${appId}/public/data/poker_scores`);
+                const q = query(publicDataCollectionRef, where("name", "==", name));
+                const querySnapshot = await getDocs(q);
+
+                let documentIdToUpdate = null;
+                if (!querySnapshot.empty) {
+                    querySnapshot.forEach(doc => {
+                        documentIdToUpdate = doc.id;
+                    });
+                }
+                
+                const data = {
+                    name,
+                    chips,
+                    busted,
+                    score,
+                    updatedAt: new Date(),
+                    // Add userId for security rules
+                    userId: auth.currentUser.uid 
+                };
+
+                if (documentIdToUpdate) {
+                    // Update existing document
+                    const docRef = doc(db, `artifacts/${appId}/public/data/poker_scores`, documentIdToUpdate);
+                    await setDoc(docRef, data, { merge: true });
+                    showMessage('スコアが更新されました！');
+                } else {
+                    // Add new document
+                    await addDoc(publicDataCollectionRef, data);
+                    showMessage('スコアが送信されました！');
+                }
+                
+                // Clear form inputs
+                form.reset();
+                setupNameDropdown(); // Refresh dropdown list
+                
+            } catch (error) {
+                console.error("データの送信に失敗しました: ", error);
+                showMessage('データの送信中にエラーが発生しました。', 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '送信';
+            }
+        });
+
+        // Initialize on window load
+        window.onload = initializeFirebase;
+    </script>
+</body>
+</html>
